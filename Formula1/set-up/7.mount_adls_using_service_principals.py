@@ -31,6 +31,10 @@ dbutils.fs.mount(
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 display(dbutils.fs.ls("/mnt/formula1dlmm24/demo"))
 
 # COMMAND ----------

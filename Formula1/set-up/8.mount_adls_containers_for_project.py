@@ -56,6 +56,10 @@ mount_adls('formula1dlmm24', 'presentation')
 
 # COMMAND ----------
 
+mount_adls('formula1dlmm24', 'demo')
+
+# COMMAND ----------
+
 display(dbutils.fs.ls("/mnt/formula1dlmm24/demo"))
 
 # COMMAND ----------

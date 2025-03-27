@@ -15,6 +15,11 @@ v_data_source = dbutils.widgets.get("p_data_source")
 
 # COMMAND ----------
 
+dbutils.widgets.text("p_file_date", "2021-03-28")
+v_file_date = dbutils.widgets.get("p_file_date")
+
+# COMMAND ----------
+
 # MAGIC %run "../includes/configuration"
 
 # COMMAND ----------
@@ -46,12 +51,11 @@ results_schema = StructType(fields=[StructField("resultId", IntegerType(), False
                                     StructField("fastestLapSpeed", FloatType(), True),
                                     StructField("statusId", StringType(), True)])
 
-
 # COMMAND ----------
 
 results_df = spark.read \
-    .schema(results_schema) \
-    .json(f"{raw_folder_path}/results.json")
+.schema(results_schema) \
+.json(f"{raw_folder_path}/{v_file_date}/results.json")
 
 # COMMAND ----------
 
@@ -73,8 +77,12 @@ results_with_columns_df = results_df.withColumnRenamed("resultId", "result_id") 
                                     .withColumnRenamed("fastestLap", "fastest_lap") \
                                     .withColumnRenamed("fastestLapTime", "fastest_lap_time") \
                                     .withColumnRenamed("fastestLapSpeed", "fastest_lap_speed") \
-                                    .withColumn("ingestion_date", current_timestamp()) \
-                                    .withColumn("data_source", lit(v_data_source))
+                                    .withColumn("data_source", lit(v_data_source)) \
+                                    .withColumn("file_date", lit(v_file_date))
+
+# COMMAND ----------
+
+results_with_ingestion_date_df = add_ingestion_date(results_with_columns_df)
 
 # COMMAND ----------
 
@@ -83,16 +91,11 @@ results_with_columns_df = results_df.withColumnRenamed("resultId", "result_id") 
 
 # COMMAND ----------
 
-results_final_df = results_with_columns_df.drop(col("statusId"))
+results_final_df = results_with_ingestion_date_df.drop(col("statusId"))
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC #### Step 4 - Write the output to processed container in parquet format
-
-# COMMAND ----------
-
-#results_final_df.write.mode("overwrite").partitionBy('race_id').parquet(f"{processed_folder_path}/results")
+results_deduped_df = results_final_df.dropDuplicates(["race_id", "driver_id"])
 
 # COMMAND ----------
 
@@ -101,12 +104,26 @@ results_final_df = results_with_columns_df.drop(col("statusId"))
 
 # COMMAND ----------
 
-results_final_df.write.mode("overwrite").format("parquet").saveAsTable("f1_processed.results")
+# MAGIC %md
+# MAGIC #### Step 4 - Write the output to processed container in parquet format
 
 # COMMAND ----------
 
-#display(spark.read.parquet(f"{processed_folder_path}/results"))
+merge_condition = "tgt.result_id = src.result_id AND tgt.race_id = src.race_id"
+merge_delta_data(results_deduped_df, 'f1_processed', 'results', processed_folder_path, merge_condition, 'race_id')
 
 # COMMAND ----------
 
 dbutils.notebook.exit("Success")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC SELECT race_id, count(1) 
+# MAGIC FROM f1_processed.results
+# MAGIC GROUP BY race_id
+# MAGIC ORDER BY race_id DESC;
+
+# COMMAND ----------
+
+
